@@ -1,0 +1,54 @@
+/* src/styles/OSK.css — transparent on-screen keyboard overlay */
+
+.osk-overlay {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1040; /* above canvas, below sidebar drawer (1050) */
+  padding: 2px 4px calc(4px + env(safe-area-inset-bottom));
+  background: rgba(17, 20, 24, var(--osk-alpha, 0.3));
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.osk-row {
+  display: flex;
+  gap: 3px;
+  margin: 3px 0;
+}
+
+.osk-key {
+  flex-grow: 1;
+  flex-basis: 0;
+  min-height: clamp(30px, 6.5vh, 46px);
+  border: none;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-size: clamp(13px, 2.6vh, 18px);
+  line-height: 1.1;
+  cursor: pointer;
+  touch-action: manipulation; /* suppress double-tap zoom */
+  -webkit-tap-highlight-color: transparent;
+}
+
+.osk-key.osk-down {
+  background: rgba(255, 255, 255, 0.45);
+  color: #111;
+}
+
+.osk-key-mod,
+.osk-key-shift,
+.osk-key-caps,
+.osk-key-layer {
+  background: rgba(255, 255, 255, 0.07);
+  font-size: clamp(11px, 2.1vh, 14px);
+}
+
+.osk-key.osk-active {
+  background: rgba(120, 170, 255, 0.55);
+  color: #fff;
+}

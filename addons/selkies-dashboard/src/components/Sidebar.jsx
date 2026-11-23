@@ -1,6 +1,8 @@
 // src/components/Sidebar.jsx
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import GamepadVisualizer from "./GamepadVisualizer";
+import OnScreenKeyboard from "../keyboard/OnScreenKeyboard";
+import { KEYBOARD_LAYOUTS, DEFAULT_LAYOUT_ID, migrateLayoutId } from "../keyboard/layouts";
 import { getTranslator } from "../translations";
 import yaml from "js-yaml";
 
@@ -557,6 +559,81 @@ function Sidebar() {
     Meta: false,
   });
   const [isKeyboardButtonVisible, setIsKeyboardButtonVisible] = useState(true);
+  // --- Keyboard settings (persisted like the other dev settings) ---
+  // keyboardSource: "system" = OS soft keyboard via the popup button,
+  // "frontend" = our transparent on-screen keyboard overlay.
+  const [keyboardSource, setKeyboardSource] = useState(() => localStorage.getItem(getPrefixedKey("keyboardSource")) || "system");
+  const [oskLayout, setOskLayout] = useState(() => migrateLayoutId(localStorage.getItem(getPrefixedKey("oskLayout")) || DEFAULT_LAYOUT_ID));
+  const [oskOpacity, setOskOpacity] = useState(() => localStorage.getItem(getPrefixedKey("oskOpacity")) || 'medium');
+  // Terminal-layout overlay rows (each rendered only when its toggle is on).
+  const [oskSpecialRow, setOskSpecialRow] = useState(() => localStorage.getItem(getPrefixedKey("oskSpecialRow")) === 'true');
+  const [oskFnRow, setOskFnRow] = useState(() => localStorage.getItem(getPrefixedKey("oskFnRow")) === 'true');
+  // In frontend mode the toolbar keyboard button toggles visibility without
+  // changing the persisted source setting ("press twice = pop up, tuck away").
+  // Starts dismissed: after a page reload the keyboard is closed by default
+  // and only pops up when the floating button is pressed.
+  const [oskDismissed, setOskDismissed] = useState(true);
+  const isOskVisible = keyboardSource === 'frontend' && !oskDismissed;
+  const handleKeyboardSourceChange = (value) => {
+    setKeyboardSource(value);
+    // Do NOT auto-pop the OSK when the source is changed in settings: the
+    // keyboard stays closed until the floating button is pressed.
+  };
+  const toggleOsk = () => {
+    if (keyboardSource === 'frontend') setOskDismissed((d) => !d);
+    else handleKeyboardSourceChange('frontend');
+  };
+  useEffect(() => { localStorage.setItem(getPrefixedKey("keyboardSource"), keyboardSource); }, [keyboardSource]);
+  useEffect(() => { localStorage.setItem(getPrefixedKey("oskLayout"), oskLayout); }, [oskLayout]);
+  useEffect(() => { localStorage.setItem(getPrefixedKey("oskOpacity"), oskOpacity); }, [oskOpacity]);
+  useEffect(() => { localStorage.setItem(getPrefixedKey("oskSpecialRow"), String(oskSpecialRow)); }, [oskSpecialRow]);
+  useEffect(() => { localStorage.setItem(getPrefixedKey("oskFnRow"), String(oskFnRow)); }, [oskFnRow]);
+  // In frontend (OSK) mode the Android system keyboard must never appear:
+  // tapping the stream focuses #overlayInput, which pops the OS keyboard on
+  // Android. Mark it readonly (Android does not show a soft keyboard for
+  // readonly inputs) and blur it defensively whenever it gains focus.
+  // #overlayInput is created lazily by the stream core, so poll until found.
+  useEffect(() => {
+    let attached = null;
+    const apply = (overlay) => {
+      if (attached === overlay) return;
+      detach();
+      attached = overlay;
+      overlay.setAttribute('readonly', '');
+      // focusin (unlike focus) is cancelable: preventing it in capture
+      // phase stops the element from ever taking focus.
+      overlay.addEventListener('focusin', blockFocus, true);
+      overlay.addEventListener('focus', blockFocus, true);
+      if (document.activeElement === overlay) overlay.blur();
+    };
+    const blockFocus = (e) => {
+      // Stop the focus outright (Android shows no soft keyboard for
+      // readonly inputs; belt-and-suspenders keeps the caret out too).
+      if (attached) { e.preventDefault(); e.stopPropagation(); attached.blur(); }
+    };
+    function detach() {
+      if (!attached) return;
+      attached.removeEventListener('focusin', blockFocus, true);
+      attached.removeEventListener('focus', blockFocus, true);
+      attached.removeAttribute('readonly');
+      attached = null;
+    }
+    if (keyboardSource !== 'frontend') {
+      const o = document.getElementById('overlayInput');
+      if (o && o === attached) detach();
+      else if (o) o.removeAttribute('readonly');
+      return undefined;
+    }
+    let tries = 0;
+    const iv = setInterval(() => {
+      const o = document.getElementById('overlayInput');
+      if (o) { apply(o); clearInterval(iv); }
+      else if (++tries > 100) clearInterval(iv); // give up after ~20s
+    }, 200);
+    const o = document.getElementById('overlayInput');
+    if (o) { apply(o); clearInterval(iv); }
+    return detach;
+  }, [keyboardSource]);
   const [isTouchGamepadActive, setIsTouchGamepadActive] = useState(false);
   const [isTouchGamepadSetup, setIsTouchGamepadSetup] = useState(false);
   const [availablePlacements, setAvailablePlacements] = useState(null);
@@ -1125,6 +1202,7 @@ function Sidebar() {
     settings: false,
     audioSettings: false,
     screenSettings: false,
+    keyboardSettings: false,
     stats: false,
     clipboard: false,
     gamepads: false,
@@ -1136,7 +1214,7 @@ function Sidebar() {
   const notificationTimeouts = useRef({});
   const [isFilesModalOpen, setIsFilesModalOpen] = useState(false);
   const [isAppsModalOpen, setIsAppsModalOpen] = useState(false);
-  const [keyboardButtonPosition, setKeyboardButtonPosition] = useState({ bottom: 20, right: 20 });
+  const [keyboardButtonPosition, setKeyboardButtonPosition] = useState({ top: 20, right: 20 });
   const dragInfo = useRef({
     isDragging: false,
     hasDragged: false,
@@ -1180,7 +1258,7 @@ function Sidebar() {
     dragInfo.current.pointerId = e.pointerId;
     dragInfo.current.startX = e.clientX;
     dragInfo.current.startY = e.clientY;
-    dragInfo.current.initialBottom = keyboardButtonPosition.bottom;
+    dragInfo.current.initialTop = keyboardButtonPosition.top;
     dragInfo.current.initialRight = keyboardButtonPosition.right;
     e.currentTarget.setPointerCapture(e.pointerId);
   };
@@ -1197,7 +1275,7 @@ function Sidebar() {
 
     if (dragInfo.current.hasDragged) {
       setKeyboardButtonPosition({
-        bottom: dragInfo.current.initialBottom - dy,
+        top: dragInfo.current.initialTop + dy,
         right: dragInfo.current.initialRight - dx,
       });
     }
@@ -2335,7 +2413,7 @@ function Sidebar() {
             )}
           </div>
         )}
-        
+
         {(isMobile || hasDetectedTouch) && (renderableSettings.softButtons ?? true) && (
           <>
             <div className="sidebar-section-divider"></div>
@@ -2378,11 +2456,109 @@ function Sidebar() {
               <button
                 className={`mobile-key-button icon-button ${isKeyboardButtonVisible ? "active" : ""}`}
                 onClick={toggleKeyboardButtonVisibility}
+                title={t("osk.toggleTitle", "Keyboard")}
               >
                 <KeyboardIcon />
               </button>
             </div>
           </>
+        )}
+
+        {(renderableSettings.keyboardSettings ?? true) && (
+          <div className="sidebar-section">
+            <div
+              className="sidebar-section-header"
+              onClick={() => toggleSection("keyboardSettings")}
+              role="button"
+              aria-expanded={sectionsOpen.keyboardSettings}
+              aria-controls="keyboard-settings-content"
+              tabIndex="0"
+              onKeyDown={(e) =>
+                (e.key === "Enter" || e.key === " ") && toggleSection("keyboardSettings")
+              }
+            >
+              <h3>{t("sections.keyboard.title", "Keyboard Settings")}</h3>
+              <span className="section-toggle-icon">
+                {sectionsOpen.keyboardSettings ? <CaretUpIcon /> : <CaretDownIcon />}
+              </span>
+            </div>
+            {sectionsOpen.keyboardSettings && (
+              <div className="sidebar-section-content" id="keyboard-settings-content">
+                <div className="dev-setting-item">
+                  <label htmlFor="keyboardSourceSelect">{t("sections.keyboard.sourceLabel", "Keyboard:")}</label>
+                  <select
+                    id="keyboardSourceSelect"
+                      className="dev-select"
+                    value={keyboardSource}
+                    onChange={(e) => handleKeyboardSourceChange(e.target.value)}
+                  >
+                    <option value="system">{t("sections.keyboard.sourceSystem", "System keyboard")}</option>
+                    <option value="frontend">{t("sections.keyboard.sourceFrontend", "Transparent full keyboard")}</option>
+                  </select>
+                </div>
+                {keyboardSource === "frontend" && (
+                  <>
+                    <div className="dev-setting-item">
+                      <label htmlFor="oskLayoutSelect">{t("sections.keyboard.layoutLabel", "Layout:")}</label>
+                      <select
+                        id="oskLayoutSelect"
+                      className="dev-select"
+                        value={oskLayout}
+                        onChange={(e) => setOskLayout(e.target.value)}
+                      >
+                        {Object.values(KEYBOARD_LAYOUTS).map((l) => (
+                          <option key={l.id} value={l.id}>{l.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {oskLayout === "terminal" && (
+                      <>
+                        <div className="dev-setting-item toggle-item">
+                          <label htmlFor="oskSpecialRowToggle">
+                            {t("sections.keyboard.specialRowLabel", "Control & navigation keys row")}
+                          </label>
+                          <button
+                            id="oskSpecialRowToggle"
+                            className={`toggle-button-sidebar ${oskSpecialRow ? "active" : ""}`}
+                            onClick={() => setOskSpecialRow((v) => !v)}
+                            aria-pressed={oskSpecialRow}
+                          >
+                            <span className="toggle-button-sidebar-knob"></span>
+                          </button>
+                        </div>
+                        <div className="dev-setting-item toggle-item">
+                          <label htmlFor="oskFnRowToggle">
+                            {t("sections.keyboard.fnRowLabel", "Function keys row (F1-F12)")}
+                          </label>
+                          <button
+                            id="oskFnRowToggle"
+                            className={`toggle-button-sidebar ${oskFnRow ? "active" : ""}`}
+                            onClick={() => setOskFnRow((v) => !v)}
+                            aria-pressed={oskFnRow}
+                          >
+                            <span className="toggle-button-sidebar-knob"></span>
+                          </button>
+                        </div>
+                      </>
+                    )}
+                    <div className="dev-setting-item">
+                      <label htmlFor="oskOpacitySelect">{t("sections.keyboard.opacityLabel", "Opacity:")}</label>
+                      <select
+                        id="oskOpacitySelect"
+                      className="dev-select"
+                        value={oskOpacity}
+                        onChange={(e) => setOskOpacity(e.target.value)}
+                      >
+                        <option value="transparent">{t("sections.keyboard.opacityTransparent", "Transparent")}</option>
+                        <option value="medium">{t("sections.keyboard.opacityMedium", "Medium")}</option>
+                        <option value="solid">{t("sections.keyboard.opacitySolid", "Solid")}</option>
+                      </select>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         )}
 
         {(renderableSettings.videoSettings ?? true) && (
@@ -3878,10 +4054,18 @@ function Sidebar() {
         <AppsModal isOpen={isAppsModalOpen} onClose={toggleAppsModal} t={t} />
       )}
 
+      {isOskVisible && (
+        <OnScreenKeyboard
+          layoutId={oskLayout}
+          fnToggles={{ special: oskSpecialRow, f12: oskFnRow }}
+          opacity={oskOpacity}
+        />
+      )}
+
       {(isMobile || hasDetectedTouch) && isKeyboardButtonVisible && (renderableSettings.keyboardButton ?? true) && (
         <button
-          className={`virtual-keyboard-button theme-${theme} allow-native-input`}
-          onClick={onKeyboardButtonClick}
+          className={`virtual-keyboard-button theme-${theme} ${keyboardSource === 'frontend' && isOskVisible ? 'active' : ''} allow-native-input`}
+          onClick={keyboardSource === 'frontend' ? toggleOsk : onKeyboardButtonClick}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
@@ -3889,7 +4073,7 @@ function Sidebar() {
           style={{
             position: 'fixed',
             right: `${keyboardButtonPosition.right}px`,
-            bottom: `${keyboardButtonPosition.bottom}px`,
+            top: `${keyboardButtonPosition.top}px`,
             touchAction: 'none',
           }}
           title={t("buttons.virtualKeyboardButtonTitle", "Pop Keyboard")}
