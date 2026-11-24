@@ -235,9 +235,9 @@ function KeyboardOverlay({ layoutId, special, fnRow, opacity }: { layoutId: stri
   );
 }
 
-/** The overlay the chrome mounts: drawn while the keyboard is open. */
+/** The overlay the chrome mounts: drawn while the frontend keyboard is picked and open. */
 export function OnScreenKeyboard() {
   const d = useDashboard();
-  if (!d.oskVisible) return null;
+  if (d.oskSource !== "frontend" || !d.oskVisible) return null;
   return <KeyboardOverlay layoutId={d.oskLayoutId} special={d.oskSpecialRow} fnRow={d.oskFnRow} opacity={d.oskOpacity} />;
 }

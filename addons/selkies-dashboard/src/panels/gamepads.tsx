@@ -148,23 +148,113 @@ const subscribeCoarsePointer = (onChange: () => void) => {
 };
 const isCoarsePointer = () => coarsePointer?.matches ?? false;
 
+/** Where the floating button sits, anchored to the top-right corner of the viewport. */
+interface ButtonPos { top: number; right: number }
+
+const BUTTON_POS_KEY = "osk_button_pos";
+const BUTTON_EDGE = 8;
+const BUTTON_SIZE = 40;
+const DRAG_THRESHOLD = 10;
+
+const defaultButtonPos = (): ButtonPos => ({ top: (window.innerHeight - BUTTON_SIZE) / 2, right: 16 });
+
+/** Keep the button fully inside the viewport. */
+function clampButtonPos(pos: ButtonPos): ButtonPos {
+  return {
+    top: Math.min(Math.max(BUTTON_EDGE, pos.top), Math.max(BUTTON_EDGE, window.innerHeight - BUTTON_SIZE - BUTTON_EDGE)),
+    right: Math.min(Math.max(BUTTON_EDGE, pos.right), Math.max(BUTTON_EDGE, window.innerWidth - BUTTON_SIZE - BUTTON_EDGE)),
+  };
+}
+
+/** The last place it was dropped, or the default: the middle of the right edge. */
+function loadButtonPos(): ButtonPos {
+  try {
+    const raw = localStorage.getItem(getPrefixedKey(BUTTON_POS_KEY));
+    if (raw) {
+      const pos = JSON.parse(raw) as ButtonPos;
+      if (typeof pos?.top === "number" && typeof pos?.right === "number") return clampButtonPos(pos);
+    }
+  } catch { /* junk storage falls back to the default */ }
+  return defaultButtonPos();
+}
+
 /**
  * The button that asks the core to show the virtual keyboard while the primary
  * pointer is coarse (a phone, a tablet, a convertible in its tablet posture)
  * and no keyboard is attached, unless the keyboard toggle has hidden it.
+ * It rests at the middle of the right edge and can be dragged anywhere,
+ * where it stays across reloads; a drag never counts as a press.
  */
 export function VirtualKeyboardButton() {
   const d = useDashboard();
   const coarse = React.useSyncExternalStore(subscribeCoarsePointer, isCoarsePointer);
+  const [pos, setPos] = React.useState<ButtonPos>(loadButtonPos);
+  // The original's drag bookkeeping: capture the pointer, mark the drag past a
+  // threshold, and swallow the click the release would otherwise raise.
+  const drag = React.useRef({ isDragging: false, hasDragged: false, pointerId: null as number | null, startX: 0, startY: 0, initialTop: 0, initialRight: 0 });
+
+  // A rotation or window resize pulls the button back inside the viewport.
+  React.useEffect(() => {
+    const onResize = () => setPos(clampButtonPos);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
   // On its own setting, not on the gamepads, and only while the primary pointer is coarse: a fine one on a touch
   // screen is a convertible with its keyboard attached (Edge on a Surface turns it fine with the type cover), where
   // the system keeps its on-screen keyboard down, a touch on the screen notwithstanding.
   if (!d.keyboardButton || !coarse || d.isSecondaryDisplay || d.isViewer || !d.renderable.chrome
     || !d.renderable.keyboardButton) return null;
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    drag.current.isDragging = true;
+    drag.current.hasDragged = false;
+    drag.current.pointerId = event.pointerId;
+    drag.current.startX = event.clientX;
+    drag.current.startY = event.clientY;
+    drag.current.initialTop = pos.top;
+    drag.current.initialRight = pos.right;
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const handlePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (!drag.current.isDragging) return;
+    const dx = event.clientX - drag.current.startX;
+    const dy = event.clientY - drag.current.startY;
+    if (!drag.current.hasDragged && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
+      drag.current.hasDragged = true;
+    }
+    if (drag.current.hasDragged) {
+      setPos(clampButtonPos({ top: drag.current.initialTop + dy, right: drag.current.initialRight - dx }));
+    }
+  };
+  const handlePointerUp = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (drag.current.pointerId !== null && event.currentTarget.hasPointerCapture(drag.current.pointerId)) {
+      event.currentTarget.releasePointerCapture(drag.current.pointerId);
+    }
+    drag.current.isDragging = false;
+    drag.current.pointerId = null;
+    if (drag.current.hasDragged) {
+      try { localStorage.setItem(getPrefixedKey(BUTTON_POS_KEY), JSON.stringify(pos)); } catch { /* full storage only loses the place */ }
+    }
+  };
+  const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (drag.current.hasDragged) {
+      event.preventDefault();
+      event.stopPropagation();
+      drag.current.hasDragged = false;
+      return;
+    }
+    d.showVirtualKeyboard();
+  };
+
   return (
-    <Button variant="default" size="icon" className="virtual-keyboard-button fixed right-4 bottom-4 z-[2050]" data-virtual-keyboard-button=""
+    <Button variant="default" size="icon" data-virtual-keyboard-button=""
+      className={`virtual-keyboard-button fixed z-[2050]${d.oskSource === "frontend" && d.oskVisible ? " ring-2 ring-primary/70" : ""}`}
+      style={{ top: pos.top, right: pos.right, touchAction: "none" }}
       aria-label={t("topMenu.virtualKeyboard")} title={t("topMenu.virtualKeyboard")}
-      onClick={d.showVirtualKeyboard}>
+      onClick={handleClick}
+      onPointerDown={handlePointerDown} onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp}>
       <Keyboard className="size-4" />
     </Button>
   );

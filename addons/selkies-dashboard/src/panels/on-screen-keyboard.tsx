@@ -34,7 +34,7 @@ export function OnScreenKeyboardSettings() {
           <Field htmlFor="oskLayoutSelect" label={t("osk.layoutLabel")}>
             <NativeSelect id="oskLayoutSelect" value={d.oskLayoutId}
               onValueChange={d.setOskLayoutId}
-              options={KEYBOARD_LAYOUT_IDS.map((id) => ({ value: id, label: t(KEYBOARD_LAYOUTS[id].name) }))} />
+              options={KEYBOARD_LAYOUT_IDS.map((id) => ({ value: id, label: KEYBOARD_LAYOUTS[id].name }))} />
           </Field>
           {supportsToggles && (
             <>

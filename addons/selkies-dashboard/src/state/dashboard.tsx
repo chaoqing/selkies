@@ -389,11 +389,12 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
   /** Keeps the persisted copy of a keyboard choice and applies it at once. */
   const persist = (key: string, value: string) => localStorage.setItem(getPrefixedKey(key), value);
 
-  /** Picks the keyboard source: the overlay opens with the frontend one and closes with the system one. */
+  /** Picks the keyboard source. Like the original, changing it never pops the
+   *  keyboard open: it stays closed until the floating button is pressed. */
   const setOskSource = React.useCallback((source: "system" | "frontend") => {
     persist("osk_source", source);
     setOskSourceState(source);
-    setOskVisible(source === "frontend");
+    if (source !== "frontend") setOskVisible(false);
   }, []);
 
   const setOskLayoutId = React.useCallback((id: string) => {
