@@ -33,6 +33,7 @@ import { PALETTE_CHORDS, PALETTE_KEYS, TRACKPAD_SPEEDS, TRACKPAD_SPEED_KEY, USER
 import { computeRenderableSettings, getLastServerSettings, getPrefixedKey, getPrintJobs, hardwareKeyboard,
   isMobileClient, isSecondaryDisplay, isViewerUrlMode, onCoreMessage, type Renderable, type ServerSettings } from "@/utils";
 import { LAYOUTS, layoutById, resolveLayout, storeLayout, type LayoutSpec } from "@/layouts";
+import { DEFAULT_LAYOUT_ID, KEYBOARD_LAYOUT_IDS, migrateLayoutId } from "@/keyboard/layouts";
 
 export { PALETTE_CHORDS, PALETTE_KEYS, TRACKPAD_SPEEDS };
 
@@ -101,6 +102,25 @@ export interface DashboardState {
   toggleKeyboardButton: () => void;
   /** Pops the system's on-screen keyboard through the core's assist input. */
   showVirtualKeyboard: () => void;
+  /** Which keyboard types: the system's IME, or the transparent frontend overlay. */
+  oskSource: "system" | "frontend";
+  /** Picks the keyboard source, opening the frontend overlay when it is chosen. */
+  setOskSource: (source: "system" | "frontend") => void;
+  /** The keyboard the overlay draws, an id of `keyboard/layouts`. */
+  oskLayoutId: string;
+  setOskLayoutId: (id: string) => void;
+  /** Whether the terminal layout carries its special-keys row. */
+  oskSpecialRow: boolean;
+  setOskSpecialRow: (on: boolean) => void;
+  /** Whether the terminal layout carries the F1-F12 row. */
+  oskFnRow: boolean;
+  setOskFnRow: (on: boolean) => void;
+  /** How visible the overlay's keys are: `transparent`, `medium`, or `solid`. */
+  oskOpacity: string;
+  setOskOpacity: (tier: string) => void;
+  /** The frontend keyboard overlay is on screen. */
+  oskVisible: boolean;
+  toggleOsk: () => void;
   /** The stats overlay is on screen, kept across reloads. */
   statsOpen: boolean;
   setStatsOpen: (open: boolean) => void;
@@ -142,7 +162,7 @@ export function useDashboard(): DashboardState {
   return state;
 }
 
-const post = (message: object) => window.postMessage(message, window.location.origin);
+export const post = (message: object) => window.postMessage(message, window.location.origin);
 
 /**
  * Leaves fullscreen when in it, otherwise asks the core to enter it. Entering
@@ -161,7 +181,7 @@ function leaveOrRequest(request: "requestFullscreen" | "requestGamingMode"): voi
 }
 
 /** Dispatches a synthetic KeyboardEvent on `window` for the core's input handler. */
-function sendKeyEvent(type: string, key: string, code: string, state: Partial<HeldKeys> & { Shift?: boolean }): void {
+export function sendKeyEvent(type: string, key: string, code: string, state: Partial<HeldKeys> & { Shift?: boolean }): void {
   window.dispatchEvent(new KeyboardEvent(type, {
     key, code,
     ctrlKey: !!state.Control, altKey: !!state.Alt, metaKey: !!state.Meta, shiftKey: !!state.Shift,
@@ -193,6 +213,21 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
   });
   const [keyboardButton, setKeyboardButton] = React.useState(true);
   const keyboardAttached = useKeyboardAttached();
+  // The frontend keyboard: where keys come from, which layout is drawn, and
+  // how it looks, all kept across reloads.
+  const [oskSource, setOskSourceState] = React.useState<"system" | "frontend">(
+    () => (localStorage.getItem(getPrefixedKey("osk_source")) === "frontend" ? "frontend" : "system"));
+  const [oskLayoutId, setOskLayoutIdState] = React.useState<string>(() => {
+    const stored = migrateLayoutId(localStorage.getItem(getPrefixedKey("osk_layout")) ?? "");
+    return KEYBOARD_LAYOUT_IDS.includes(stored) ? stored : DEFAULT_LAYOUT_ID;
+  });
+  const [oskSpecialRow, setOskSpecialRowState] = React.useState<boolean>(
+    () => localStorage.getItem(getPrefixedKey("osk_special_row")) === "true");
+  const [oskFnRow, setOskFnRowState] = React.useState<boolean>(
+    () => localStorage.getItem(getPrefixedKey("osk_fn_row")) === "true");
+  const [oskOpacity, setOskOpacityState] = React.useState<string>(
+    () => localStorage.getItem(getPrefixedKey("osk_opacity")) || "medium");
+  const [oskVisible, setOskVisible] = React.useState(false);
   const [statsOpen, setStatsOpenState] = React.useState(() => localStorage.getItem(getPrefixedKey("stats_strip")) === "true");
   const [printJobCount, setPrintJobCount] = React.useState(() => getPrintJobs().length);
   const [heldKeys, setHeldKeys] = React.useState<HeldKeys>({ Control: false, Alt: false, Meta: false });
@@ -340,11 +375,79 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
    * attached keyboard is no longer assumed, so the floating button comes back.
    */
   // Asked for, the on-screen keyboard is the core's to raise (lib/virtual-keyboard.js), in the same tap: an attached
-  // keyboard is no longer assumed, so the floating button comes back.
+  // keyboard is no longer assumed, so the floating button comes back. Where the frontend keyboard was picked, the
+  // same tap opens the overlay instead, and the system's IME stays down.
   const showVirtualKeyboard = React.useCallback(() => {
     keyboardWatch.reset();
+    if (oskSource === "frontend") {
+      setOskVisible((visible) => !visible);
+      return;
+    }
     window.postMessage({ type: "showVirtualKeyboard" }, window.location.origin);
+  }, [oskSource]);
+
+  /** Keeps the persisted copy of a keyboard choice and applies it at once. */
+  const persist = (key: string, value: string) => localStorage.setItem(getPrefixedKey(key), value);
+
+  /** Picks the keyboard source: the overlay opens with the frontend one and closes with the system one. */
+  const setOskSource = React.useCallback((source: "system" | "frontend") => {
+    persist("osk_source", source);
+    setOskSourceState(source);
+    setOskVisible(source === "frontend");
   }, []);
+
+  const setOskLayoutId = React.useCallback((id: string) => {
+    persist("osk_layout", id);
+    setOskLayoutIdState(id);
+  }, []);
+
+  const setOskSpecialRow = React.useCallback((on: boolean) => {
+    persist("osk_special_row", String(on));
+    setOskSpecialRowState(on);
+  }, []);
+
+  const setOskFnRow = React.useCallback((on: boolean) => {
+    persist("osk_fn_row", String(on));
+    setOskFnRowState(on);
+  }, []);
+
+  const setOskOpacity = React.useCallback((tier: string) => {
+    persist("osk_opacity", tier);
+    setOskOpacityState(tier);
+  }, []);
+
+  const toggleOsk = React.useCallback(() => setOskVisible((visible) => !visible), []);
+
+  /**
+   * While the frontend keyboard is picked, the core's assist input must not
+   * raise the system's IME: it stays read-only — created after the stream,
+   * so the tree is watched until it appears — and any focus it is given is
+   * dropped at once. Leaving the mode restores it.
+   */
+  React.useEffect(() => {
+    const assistInput = () => document.getElementById("overlayInput") as HTMLInputElement | null;
+    const assist = assistInput();
+    if (oskSource !== "frontend") {
+      if (assist) assist.readOnly = false;
+      return undefined;
+    }
+    if (assist) assist.readOnly = true;
+    const dropAssistFocus = (event: FocusEvent) => {
+      if (event.target === assistInput()) (event.target as HTMLElement).blur();
+    };
+    document.addEventListener("focusin", dropAssistFocus);
+    const observer = new MutationObserver(() => {
+      const el = assistInput();
+      if (el) el.readOnly = true;
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      document.removeEventListener("focusin", dropAssistFocus);
+      observer.disconnect();
+      const el = assistInput();
+      if (el) el.readOnly = false;
+    };
+  }, [oskSource]);
 
   /** Toggles a held modifier soft key; the core's synthetic-key mode is raised while any is held. */
   const holdKey = React.useCallback((key: keyof HeldKeys, code: string) => {
@@ -497,6 +600,12 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     keyboardButton: keyboardButton && !keyboardAttached,
     toggleKeyboardButton,
     showVirtualKeyboard,
+    oskSource, setOskSource,
+    oskLayoutId, setOskLayoutId,
+    oskSpecialRow, setOskSpecialRow,
+    oskFnRow, setOskFnRow,
+    oskOpacity, setOskOpacity,
+    oskVisible, toggleOsk,
     statsOpen,
     setStatsOpen: setStatsOpenState,
     printJobCount,

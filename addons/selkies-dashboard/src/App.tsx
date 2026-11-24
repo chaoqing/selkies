@@ -23,6 +23,7 @@ import { Apps } from "@/panels/apps";
 import { FilesDialog } from "@/panels/files";
 import { VirtualKeyboardButton } from "@/panels/gamepads";
 import { ConnectionIndicator, Notices, Toaster } from "@/panels/notices";
+import { OnScreenKeyboard } from "@/keyboard/on-screen-keyboard";
 import PlayerGamepadButton from "@/panels/player-gamepad-button";
 import { ScreenPlacement } from "@/panels/screen-placement";
 import { SettingsProvider } from "@/state/settings-context";
@@ -39,6 +40,7 @@ function Chrome() {
       <Layout />
       <ScreenPlacement />
       <VirtualKeyboardButton />
+      <OnScreenKeyboard />
       {d.statsOpen && !d.isSecondaryDisplay && d.renderable.stats && <Stats />}
       {d.dialog === "apps" && <Apps isOpen onClose={d.closeDialog} />}
       {d.dialog === "files" && <FilesDialog open onOpenChange={(open) => { if (!open) d.closeDialog(); }} />}

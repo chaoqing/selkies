@@ -1,0 +1,67 @@
+/*
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+/* The transparent on-screen keyboard: keys drawn over the foot of the
+   stream, kept above the dashboard chrome but below dialogs and notices,
+   sized to the width with clamp() like the rest of the UI, and honoring
+   the device's safe area. */
+.osk-overlay {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2040;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35em;
+  padding: 0.5em 0.5em calc(0.5em + env(safe-area-inset-bottom, 0px));
+  background: rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(2px);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.osk-row {
+  display: flex;
+  gap: 0.35em;
+}
+
+.osk-key {
+  min-width: 2.2em;
+  min-height: clamp(1.9em, 4.5vw, 2.6em);
+  padding: 0.15em 0.2em;
+  border: 0 solid transparent;
+  border-radius: 0.45em;
+  background: rgba(255, 255, 255, var(--osk-alpha, 0.3));
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+  font: inherit;
+  font-size: clamp(0.68rem, 1.7vw, 0.9rem);
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.osk-key:hover {
+  background: rgba(255, 255, 255, calc(var(--osk-alpha, 0.3) + 0.12));
+}
+
+.osk-key.osk-down {
+  background: rgba(120, 170, 255, 0.55);
+  border-color: rgba(120, 170, 255, 0.8);
+}
+
+.osk-key.osk-active {
+  background: rgba(120, 170, 255, 0.4);
+  border-color: rgba(120, 170, 255, 0.7);
+}
+
+.osk-key-shift,
+.osk-key-caps,
+.osk-key-layer,
+.osk-key-mod {
+  font-size: 0.78em;
+}

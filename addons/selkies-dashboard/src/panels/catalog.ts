@@ -17,10 +17,11 @@
  * @module
  */
 import type * as React from "react";
-import { Clipboard as ClipboardIcon, FileText, Gamepad2, Joystick, Keyboard, LayoutGrid, Mic, Monitor, Printer, Share2, Volume2, Webcam,
+import { Clipboard as ClipboardIcon, FileText, Gamepad2, Joystick, Keyboard, LayoutGrid, Mic, Monitor, Printer, Share2, TextCursorInput, Volume2, Webcam,
   type LucideIcon } from "lucide-react";
 import { AppsAction, FilesActions, GamepadsBody, SharingBody } from "@/panels/catalog-bodies";
 import { Clipboard } from "@/panels/clipboard";
+import { OnScreenKeyboardSettings } from "@/panels/on-screen-keyboard";
 import { Printing } from "@/panels/printing";
 import { AudioDeviceSettings, AudioQualitySettings, DisplaySettings, FormatSettings, PerformanceSettings, ResolutionSettings } from "@/panels/settings";
 import { ShortcutsMenu } from "@/panels/shortcuts";
@@ -135,6 +136,10 @@ export const PANELS: PanelSpec[] = [
   {
     id: "shortcuts", contentId: "shortcuts-content", title: "sections.shortcuts.title", icon: Keyboard, kind: "panel",
     shown: ({ d }) => d.renderable.shortcuts, Body: ShortcutsMenu,
+  },
+  {
+    id: "keyboard", contentId: "keyboard-content", title: "osk.title", icon: TextCursorInput, kind: "panel",
+    shown: ({ primary }) => primary, Body: OnScreenKeyboardSettings,
   },
 ];
 
