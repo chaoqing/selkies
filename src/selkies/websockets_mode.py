@@ -7054,6 +7054,11 @@ class DataStreamingServer(BaseStreamingService):
             if p_w > 0 and p_h > 0:
                 layouts['primary'] = {'x': 0, 'y': 0, 'w': p_w, 'h': p_h}
                 total_width, total_height = p_w, p_h
+        elif not primary_client and secondary_client:
+            s_w, s_h = secondary_client.get('width', 0), secondary_client.get('height', 0)
+            if s_w > 0 and s_h > 0:
+                layouts[secondary_id] = {'x': 0, 'y': 0, 'w': s_w, 'h': s_h}
+                total_width, total_height = s_w, s_h
         elif primary_client and secondary_client:
             p_w, p_h = primary_client.get('width', 0), primary_client.get('height', 0)
             s_w, s_h = secondary_client.get('width', 0), secondary_client.get('height', 0)
