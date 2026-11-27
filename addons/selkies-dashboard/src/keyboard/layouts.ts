@@ -75,71 +75,60 @@ const fRow = (): KeyDesc[] =>
   }));
 
 /**
- * JuiceSSH-style special keys row — optional overlay row (terminal layout
- * only). Carries the layer toggle so 123/ABC stays reachable when enabled.
+ * Terminal bottom row: the keys that used to need a special-keys overlay row,
+ * folded into the space bar's row in three roughly equal groups — latching
+ * modifiers and Home on the left, Space in the middle, End and the arrow
+ * cluster on the right. The layer toggle lives here so 123/ABC is always
+ * reachable, which retires the old overlay special-keys row entirely.
  */
-const specialRow = (layer: "letters" | "symbols"): KeyDesc[] => {
+const terminalBottomRow = (layer: "letters" | "symbols"): KeyDesc[] => {
   const onSymbols = layer === "symbols";
+  const nav = (label: string, key: string, code: string, repeat = false): KeyDesc =>
+    ({ label, key, code, w: 0.95, ...(repeat ? { repeat: true } : {}) });
   return [
-    { type: "layer", target: onSymbols ? "letters" : "symbols", label: onSymbols ? "ABC" : "123", w: 1.2 },
-    { label: "Esc", key: "Escape", code: "Escape" },
-    { label: "Tab", key: "Tab", code: "Tab" },
-    { type: "mod", mod: "Control", label: "Ctrl", key: "Control", code: "ControlLeft" },
-    { type: "mod", mod: "Alt", label: "Alt", key: "Alt", code: "AltLeft" },
-    { label: "Home", key: "Home", code: "Home" },
-    { label: "End", key: "End", code: "End" },
-    { label: "PgUp", key: "PageUp", code: "PageUp" },
-    { label: "PgDn", key: "PageDown", code: "PageDown" },
+    { label: "Esc", key: "Escape", code: "Escape", w: 0.95 },
+    { type: "mod", mod: "Control", label: "Ctrl", key: "Control", code: "ControlLeft", w: 0.95 },
+    { type: "mod", mod: "Alt", label: "Alt", key: "Alt", code: "AltLeft", w: 0.95 },
+    { type: "layer", target: onSymbols ? "letters" : "symbols", label: onSymbols ? "ABC" : "123", w: 0.95 },
+    nav("⇱", "Home", "Home"),
+    { label: "␣", key: " ", code: "Space", w: 4.9 },
+    nav("⇲", "End", "End"),
+    nav("←", "ArrowLeft", "ArrowLeft", true),
+    nav("↑", "ArrowUp", "ArrowUp", true),
+    nav("↓", "ArrowDown", "ArrowDown", true),
+    nav("→", "ArrowRight", "ArrowRight", true),
   ];
 };
 
-/** Shared bottom row: just a wide space bar. */
-const spaceRow: KeyDesc[] = [{ label: "␣", key: " ", code: "Space" }];
-
 /** The five typing rows common to every layout. */
-const typeRows = (): KeyDesc[][] => [
+const typeRows = (layer: "letters" | "symbols"): KeyDesc[][] => [
   [...row(["`", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "="]), backspace],
   [tab, ...row(["q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "[", "]", "\\"])],
   [{ type: "caps", label: "⇪", w: 1.5 }, ...row(["a", "s", "d", "f", "g", "h", "j", "k", "l", ";", "'"]), enter],
   [{ type: "shift", label: "⇧", w: 1.7 }, ...row(["z", "x", "c", "v", "b", "n", "m", ",", ".", "/"]), { type: "shift", label: "⇧", w: 1.7 }],
-  spaceRow,
+  terminalBottomRow(layer),
 ];
 
-const symbolRows = (): KeyDesc[][] => [
+const symbolRows = (layer: "letters" | "symbols"): KeyDesc[][] => [
   [...row(["!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "-", "="]), backspace],
   [tab, ...row(["[", "]", "{", "}", "(", ")", "<", ">", "_", "\\"])],
   [...row(["`", "~", "|", ":", ";", "\"", "'", "+", "€", "£", "¥"]), enter],
   [...row(["?", "!", "$", "&", "@", "•", "°", "©", "±", "×", "÷"])],
-  spaceRow,
+  terminalBottomRow(layer),
 ];
 
 /**
- * Terminal layout: plain QWERTY (+symbols) with two optional overlay rows,
- * controlled by toggles in the settings panel (both default off):
+ * Terminal layout: plain QWERTY (+symbols) whose bottom row carries the
+ * modifier and navigation cluster; one optional overlay row, controlled by a
+ * toggle in the settings panel (default off):
  *   toggles.f12     -> F1-F12 row at the top
- *   toggles.special -> Esc/Tab/Ctrl/Alt/Home/End/PgUp/PgDn row at the top
  */
-const buildTerminalLayers = (toggles: { special?: boolean; f12?: boolean } = {}): LayoutLayers => {
-  const { special = false, f12 = false } = toggles;
-  const top = (layer: "letters" | "symbols"): KeyDesc[][] => [
-    ...(f12 ? [fRow()] : []),
-    ...(special ? [specialRow(layer)] : []),
-  ];
-  const layers: LayoutLayers = {
-    letters: [...top("letters"), ...typeRows()],
-    symbols: [...top("symbols"), ...symbolRows()],
+const buildTerminalLayers = (toggles: { f12?: boolean } = {}): LayoutLayers => {
+  const { f12 = false } = toggles;
+  return {
+    letters: [...(f12 ? [fRow()] : []), ...typeRows("letters")],
+    symbols: [...(f12 ? [fRow()] : []), ...symbolRows("symbols")],
   };
-  if (!special) {
-    // Without the special row the layer switch must stay reachable: replace
-    // the duplicate right-hand Shift with the 123/ABC toggle.
-    const li = layers.letters.findIndex((r) => r.some((d) => d.type === "shift"));
-    layers.letters[li] = [...layers.letters[li].slice(0, -1),
-      { type: "layer", target: "symbols", label: "123", w: 1.7 }];
-    const si = layers.symbols.length - 2; // symbol row before the space bar
-    layers.symbols[si] = [{ type: "layer", target: "letters", label: "ABC", w: 1.7 },
-      ...layers.symbols[si]];
-  }
-  return layers;
 };
 
 const WIDE_SHIFT: KeyDesc = { type: "shift", label: "⇧" };
@@ -191,7 +180,7 @@ const buildFullLayers = (): LayoutLayers => {
 export interface KeyboardLayoutDef {
   id: string;
   name: string;
-  build: (toggles?: { special?: boolean; f12?: boolean }) => LayoutLayers;
+  build: (toggles?: { f12?: boolean }) => LayoutLayers;
   /** Whether the settings offer the terminal's overlay rows for this layout. */
   supportsToggles: boolean;
 }
@@ -217,7 +206,7 @@ export function migrateLayoutId(id: string | null | undefined): string {
 }
 
 /** A concrete layout (layer -> rows) for the given layout id and overlay-row
- *  toggles ({ special, f12 }); toggles are ignored by layouts that render
+ *  toggles ({ f12 }); toggles are ignored by layouts that render
  *  fixed function rows (Full QWERTY). */
 export interface BuiltLayout {
   id: string;
@@ -226,7 +215,7 @@ export interface BuiltLayout {
   layers: LayoutLayers;
 }
 
-export function getLayout(id: string, toggles: { special?: boolean; f12?: boolean } = {}): BuiltLayout {
+export function getLayout(id: string, toggles: { f12?: boolean } = {}): BuiltLayout {
   const layout = KEYBOARD_LAYOUTS[id] || KEYBOARD_LAYOUTS[DEFAULT_LAYOUT_ID];
   return {
     id: layout.id,

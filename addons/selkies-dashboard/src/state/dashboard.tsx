@@ -109,12 +109,13 @@ export interface DashboardState {
   /** The keyboard the overlay draws, an id of `keyboard/layouts`. */
   oskLayoutId: string;
   setOskLayoutId: (id: string) => void;
-  /** Whether the terminal layout carries its special-keys row. */
-  oskSpecialRow: boolean;
-  setOskSpecialRow: (on: boolean) => void;
   /** Whether the terminal layout carries the F1-F12 row. */
   oskFnRow: boolean;
   setOskFnRow: (on: boolean) => void;
+  /** Whether the terminal layout latches Caps and modifiers until tapped
+   *  again (sticky); off, they release after the next key, like Shift. */
+  oskStickyMods: boolean;
+  setOskStickyMods: (on: boolean) => void;
   /** How visible the overlay's keys are: `transparent`, `medium`, or `solid`. */
   oskOpacity: string;
   setOskOpacity: (tier: string) => void;
@@ -221,10 +222,10 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     const stored = migrateLayoutId(localStorage.getItem(getPrefixedKey("osk_layout")) ?? "");
     return KEYBOARD_LAYOUT_IDS.includes(stored) ? stored : DEFAULT_LAYOUT_ID;
   });
-  const [oskSpecialRow, setOskSpecialRowState] = React.useState<boolean>(
-    () => localStorage.getItem(getPrefixedKey("osk_special_row")) === "true");
   const [oskFnRow, setOskFnRowState] = React.useState<boolean>(
     () => localStorage.getItem(getPrefixedKey("osk_fn_row")) === "true");
+  const [oskStickyMods, setOskStickyModsState] = React.useState<boolean>(
+    () => localStorage.getItem(getPrefixedKey("osk_sticky_mods")) === "true");
   const [oskOpacity, setOskOpacityState] = React.useState<string>(
     () => localStorage.getItem(getPrefixedKey("osk_opacity")) || "medium");
   const [oskVisible, setOskVisible] = React.useState(false);
@@ -402,14 +403,14 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     setOskLayoutIdState(id);
   }, []);
 
-  const setOskSpecialRow = React.useCallback((on: boolean) => {
-    persist("osk_special_row", String(on));
-    setOskSpecialRowState(on);
-  }, []);
-
   const setOskFnRow = React.useCallback((on: boolean) => {
     persist("osk_fn_row", String(on));
     setOskFnRowState(on);
+  }, []);
+
+  const setOskStickyMods = React.useCallback((on: boolean) => {
+    persist("osk_sticky_mods", String(on));
+    setOskStickyModsState(on);
   }, []);
 
   const setOskOpacity = React.useCallback((tier: string) => {
@@ -603,8 +604,8 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     showVirtualKeyboard,
     oskSource, setOskSource,
     oskLayoutId, setOskLayoutId,
-    oskSpecialRow, setOskSpecialRow,
     oskFnRow, setOskFnRow,
+    oskStickyMods, setOskStickyMods,
     oskOpacity, setOskOpacity,
     oskVisible, toggleOsk,
     statsOpen,

@@ -38,8 +38,8 @@ export function OnScreenKeyboardSettings() {
           </Field>
           {supportsToggles && (
             <>
-              <SwitchRow id="oskSpecialRowToggle" label={t("osk.specialLabel")} checked={d.oskSpecialRow}
-                onToggle={() => d.setOskSpecialRow(!d.oskSpecialRow)} />
+              <SwitchRow id="oskStickyModsToggle" label={t("osk.stickyLabel")} title={t("osk.stickyDetails")}
+                checked={d.oskStickyMods} onToggle={() => d.setOskStickyMods(!d.oskStickyMods)} />
               <SwitchRow id="oskFnRowToggle" label={t("osk.fnLabel")} checked={d.oskFnRow}
                 onToggle={() => d.setOskFnRow(!d.oskFnRow)} />
             </>

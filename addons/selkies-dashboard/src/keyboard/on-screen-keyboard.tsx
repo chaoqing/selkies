@@ -16,7 +16,7 @@
  */
 import * as React from "react";
 import { post, sendKeyEvent, useDashboard } from "@/state/dashboard";
-import { getLayout, SHIFTED_CHARS, type KeyDesc } from "./layouts";
+import { getLayout, KEYBOARD_LAYOUTS, SHIFTED_CHARS, type KeyDesc } from "./layouts";
 import { basePressFor, codeForChar, glyphFor, onKeymapChange, referenceCodeForChar } from "./keymap";
 import "./on-screen-keyboard.css";
 
@@ -88,8 +88,8 @@ function geometryCode(ch: string): string {
 }
 
 /** The keyboard itself: layers, shift state, held modifiers, and repeat. */
-function KeyboardOverlay({ layoutId, special, fnRow, opacity }: { layoutId: string; special: boolean; fnRow: boolean; opacity: string }) {
-  const layout = getLayout(layoutId, { special, f12: fnRow });
+function KeyboardOverlay({ layoutId, fnRow, opacity, sticky }: { layoutId: string; fnRow: boolean; opacity: string; sticky: boolean }) {
+  const layout = getLayout(layoutId, { f12: fnRow });
   const [layer, setLayer] = React.useState<"letters" | "symbols">("letters");
   const [caps, setCaps] = React.useState(false);
   const [shiftNext, setShiftNext] = React.useState(false);
@@ -109,12 +109,35 @@ function KeyboardOverlay({ layoutId, special, fnRow, opacity }: { layoutId: stri
   const capsRef = React.useRef(caps);
   const shiftNextRef = React.useRef(shiftNext);
   const modsRef = React.useRef(mods);
+  // Sticky latches Caps/modifiers until re-tapped. Off (the default) they behave
+  // like Shift: one real key press auto-releases them, so Ctrl then c types
+  // Ctrl+C and lifts without a second tap on Ctrl.
+  const stickyRef = React.useRef(sticky);
   React.useEffect(() => {
     layerRef.current = layer;
     capsRef.current = caps;
     shiftNextRef.current = shiftNext;
     modsRef.current = mods;
   }, [layer, caps, shiftNext, mods]);
+  React.useEffect(() => { stickyRef.current = sticky; }, [sticky]);
+
+  // The three latchable modifiers and the code used to lift each.
+  const MOD_CODES: ReadonlyArray<["Control" | "Alt" | "Meta", string]> = [
+    ["Control", "ControlLeft"], ["Alt", "AltLeft"], ["Meta", "MetaLeft"],
+  ];
+
+  /** After one real key, release anything that was only latched for that key
+   *  (Caps and every held modifier) when not in sticky mode. */
+  const consumeTransient = () => {
+    if (stickyRef.current) return;
+    const cur = { ...modsRef.current };
+    let changed = false;
+    for (const [mod, code] of MOD_CODES) {
+      if (cur[mod]) { cur[mod] = false; injector.release(mod, code, cur); changed = true; }
+    }
+    if (changed) { modsRef.current = cur; setMods(cur); }
+    if (capsRef.current) { capsRef.current = false; setCaps(false); }
+  };
 
   // Release everything when the keyboard closes.
   React.useEffect(() => () => {
@@ -167,6 +190,7 @@ function KeyboardOverlay({ layoutId, special, fnRow, opacity }: { layoutId: stri
       if (press && press.shift) injectShifted(base, press.code, m);
       else if (press) injector.tap(base, press.code, m);
       else injector.tap(base, "", m);
+      consumeTransient();
       return;
     }
     const shifted = capsRef.current !== shiftNextRef.current;
@@ -175,6 +199,7 @@ function KeyboardOverlay({ layoutId, special, fnRow, opacity }: { layoutId: stri
     if (shifted) injectShifted(outCh, code, m);
     else injector.tap(outCh, code, m);
     if (shiftNextRef.current) setShiftNext(false);
+    consumeTransient();
   };
 
   const handleDown = (desc: KeyDesc) => {
@@ -196,6 +221,7 @@ function KeyboardOverlay({ layoutId, special, fnRow, opacity }: { layoutId: stri
         }, 60);
       }, 400);
     }
+    consumeTransient();
   };
 
   const handleUp = (desc: KeyDesc) => {
@@ -267,5 +293,8 @@ function KeyboardOverlay({ layoutId, special, fnRow, opacity }: { layoutId: stri
 export function OnScreenKeyboard() {
   const d = useDashboard();
   if (d.oskSource !== "frontend" || !d.oskVisible) return null;
-  return <KeyboardOverlay layoutId={d.oskLayoutId} special={d.oskSpecialRow} fnRow={d.oskFnRow} opacity={d.oskOpacity} />;
+  // The one-shot default is a terminal-layout affordance; the Full QWERTY
+  // modifier row keeps hardware latching regardless of the setting.
+  const sticky = KEYBOARD_LAYOUTS[d.oskLayoutId]?.supportsToggles ? d.oskStickyMods : true;
+  return <KeyboardOverlay layoutId={d.oskLayoutId} fnRow={d.oskFnRow} opacity={d.oskOpacity} sticky={sticky} />;
 }
