@@ -19,6 +19,8 @@
  * @module
  */
 
+import { GEN_CODES } from "./gen-keymap";
+
 /** A single key of a layout: a typed character, or an action and its code. */
 export interface KeyDesc {
   /** Character of a text key, sent through the core's synthetic-key mode. */
@@ -47,16 +49,18 @@ export interface LayoutLayers {
   symbols: KeyDesc[][];
 }
 
-/** Shifted characters for the letters layer (Android-style digit row). */
-export const SHIFTED_CHARS: Record<string, string> = {
-  "`": "~", "1": "!", "2": "@", "3": "#", "4": "$", "5": "%", "6": "^",
-  "7": "&", "8": "*", "9": "(", "0": ")", "-": "_", "=": "+", "[": "{",
-  "]": "}", "\\": "|", ";": ":", "'": "\"", ",": "<", ".": ">", "/": "?",
-};
-
-/** Reverse map: shifted char -> physical base key (e.g. '$' -> '4'). */
-export const SHIFT_REVERSE: Record<string, string> = Object.fromEntries(
-  Object.entries(SHIFTED_CHARS).map(([k, v]) => [v, k])
+/**
+ * Shifted characters for the letters layer (Android-style digit row).
+ *
+ * Derived from the generated XKB table rather than hand-written: the previous
+ * constant was maintained by eye, and a key missing here silently lost its
+ * shifted form on the key face. Letters are excluded because the letters layer
+ * capitalises them separately.
+ */
+export const SHIFTED_CHARS: Record<string, string> = Object.fromEntries(
+  Object.values(GEN_CODES)
+    .filter(([base, shifted]) => base && shifted && base !== shifted && !/^[a-z]$/i.test(base))
+    .map(([base, shifted]) => [base, shifted]),
 );
 
 const backspace: KeyDesc = { label: "⌫", key: "Backspace", code: "Backspace", w: 1.4, repeat: true };
@@ -167,7 +171,7 @@ const buildFullLayers = (): LayoutLayers => {
     letters: [
       escFRow,
       [...row(["`", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "="]), { ...backspace, w: 2 }],
-      [{ ...tab, w: 1.5 }, ...row(["q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "[", "]"]), { label: "\\", key: "\\", code: "Backslash" }],
+      [{ ...tab, w: 1.5 }, ...row(["q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "[", "]", "\\"])],
       [{ type: "caps", label: "Caps", w: 1.75 }, ...row(["a", "s", "d", "f", "g", "h", "j", "k", "l", ";", "'"]), { ...enter, w: 1.25 }],
       [{ ...WIDE_SHIFT, w: 2.25 }, ...row(["z", "x", "c", "v", "b", "n", "m", ",", ".", "/"]), { ...WIDE_SHIFT, w: 1.25 }, arrowsTop],
       modRow(arrowsBottom),
@@ -175,7 +179,7 @@ const buildFullLayers = (): LayoutLayers => {
     symbols: [
       escFRow,
       [...row(["!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "-", "="]), { ...backspace, w: 2 }],
-      [{ ...tab, w: 1.5 }, ...row(["[", "]", "{", "}", "(", ")", "<", ">", "_"]), { label: "\\", key: "\\", code: "Backslash" }],
+      [{ ...tab, w: 1.5 }, ...row(["[", "]", "{", "}", "(", ")", "<", ">", "_", "\\"])],
       [...row(["`", "~", "|", ":", ";", "\"", "'", "+", "€", "£", "¥"]), { ...enter, w: 1.75 }],
       [{ type: "layer", target: "letters", label: "ABC", w: 1.75 }, ...row(["?", "•", "°", "©", "±", "§", "¶", "†", "‡", "×"]), { ...enter, w: 1.25, label: "⏎", key: "Enter", code: "Enter" }],
       modRow(arrowsBottom),

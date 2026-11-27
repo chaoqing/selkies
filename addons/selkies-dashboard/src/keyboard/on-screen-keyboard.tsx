@@ -16,7 +16,8 @@
  */
 import * as React from "react";
 import { post, sendKeyEvent, useDashboard } from "@/state/dashboard";
-import { getLayout, SHIFTED_CHARS, SHIFT_REVERSE, type KeyDesc } from "./layouts";
+import { getLayout, SHIFTED_CHARS, type KeyDesc } from "./layouts";
+import { basePressFor, codeForChar, glyphFor, onKeymapChange, referenceCodeForChar } from "./keymap";
 import "./on-screen-keyboard.css";
 
 /** How visible the keys are against the stream, by the picked tier. */
@@ -64,11 +65,26 @@ function useKeyInjector() {
   return React.useMemo(() => ({ press, release, tap, setSynth }), [press, release, tap, setSynth]);
 }
 
-/** The `KeyboardEvent.code` of a bare character, where it is a key of the home rows. */
+/**
+ * The `KeyboardEvent.code` that types a bare character on the layout in effect.
+ *
+ * Used for characters with no physical origin of their own, i.e. the symbol
+ * palette. The hand-written version of this only knew a-z and 0-9, so every
+ * punctuation key injected with an empty code and lost its physical path; the
+ * index now comes from XKB, which also knows Shift+1 is Digit1.
+ */
 function keyToCode(ch: string): string {
-  if (/^[a-z]$/i.test(ch)) return `Key${ch.toUpperCase()}`;
-  if (/^[0-9]$/.test(ch)) return `Digit${ch}`;
-  return "";
+  return codeForChar(ch);
+}
+
+/**
+ * The `code` of a key the geometry authored as `ch`. Layouts name their keys by
+ * their US character, so this must resolve against the committed reference
+ * table: on a German keymap the active table would answer KeyZ for 'y', and the
+ * whole face would trade places.
+ */
+function geometryCode(ch: string): string {
+  return referenceCodeForChar(ch) || keyToCode(ch);
 }
 
 /** The keyboard itself: layers, shift state, held modifiers, and repeat. */
@@ -79,6 +95,10 @@ function KeyboardOverlay({ layoutId, special, fnRow, opacity }: { layoutId: stri
   const [shiftNext, setShiftNext] = React.useState(false);
   const [mods, setMods] = React.useState<Mods>({});
   const [pressedKey, setPressedKey] = React.useState<string | null>(null);
+  // A static or live table arrives after first paint, so a keyboard already on
+  // screen has to be told its faces changed.
+  const [, keymapTick] = React.useState(0);
+  React.useEffect(() => onKeymapChange(() => keymapTick((n) => n + 1)), []);
   const injector = useKeyInjector();
   const repeatTimer = React.useRef<number>(0);
   const repeatInterval = React.useRef<number>(0);
@@ -117,6 +137,11 @@ function KeyboardOverlay({ layoutId, special, fnRow, opacity }: { layoutId: stri
   /** The character a letter key yields, given explicit layer and shift states. */
   const resolveWith = (lyr: "letters" | "symbols", capsOn: boolean, shiftOn: boolean, base: string): string => {
     if (lyr === "symbols") return base;
+    // The key face reads from the active keymap, so a German table can put `z`
+    // where the geometry says `y`. Keys the table has nothing to say about keep
+    // the hand-written US fallback, so a truncated push can never blank a key.
+    const glyph = glyphFor(geometryCode(base), capsOn !== shiftOn);
+    if (glyph) return glyph;
     if (!(capsOn !== shiftOn)) return base; // XOR: caps or one-shot shift
     if (/^[a-z]$/.test(base)) return base.toUpperCase();
     return SHIFTED_CHARS[base] || base;
@@ -134,18 +159,21 @@ function KeyboardOverlay({ layoutId, special, fnRow, opacity }: { layoutId: stri
   const sendChar = (base: string) => {
     const m = modsRef.current;
     if (layerRef.current === "symbols") {
-      // On the symbol layer, a character that is a shifted physical key (a
-      // '$') injects as Shift plus that key; exotic ones (€, ×) go as direct
-      // keysyms the server maps without a physical key.
-      const inv = SHIFT_REVERSE[base];
-      if (inv) injectShifted(base, keyToCode(inv), m);
+      // On the symbol layer, a character is a request to type it, not to press
+      // a position: ask the active keymap which key produces it and whether
+      // that needs Shift; exotic ones (€, ×) go as direct keysyms the server
+      // maps without a physical key.
+      const press = basePressFor(base);
+      if (press && press.shift) injectShifted(base, press.code, m);
+      else if (press) injector.tap(base, press.code, m);
       else injector.tap(base, "", m);
       return;
     }
     const shifted = capsRef.current !== shiftNextRef.current;
     const outCh = resolveWith(layerRef.current, capsRef.current, shiftNextRef.current, base);
-    if (shifted) injectShifted(outCh, keyToCode(base), m);
-    else injector.tap(outCh, keyToCode(base), m);
+    const code = geometryCode(base);
+    if (shifted) injectShifted(outCh, code, m);
+    else injector.tap(outCh, code, m);
     if (shiftNextRef.current) setShiftNext(false);
   };
 
