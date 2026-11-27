@@ -450,6 +450,13 @@ SETTING_DEFINITIONS: List[Dict[str, Any]] = [
         "help": 'How the dashboard arranges its panels: "default" is the sidebar, a drawer on the left edge with every panel as a section; "wish" is the toolbar, a floating bar along the top edge with the panels in its menus. The first value listed is what a page shows until its user picks the other with the layout toggle, which the page keeps per browser; a single value locks the layout and hides the toggle.',
     },
     {
+        "name": "osk_keymap",
+        "type": "enum",
+        "default": "bundle",
+        "meta": {"allowed": ["bundle", "static", "live"]},
+        "help": 'Which source the on-screen keyboard reads its key faces from, within what the dashboard build allows: "bundle" is the table generated from XKB and committed into the dashboard, so it matches the layout it was generated from and nothing else; "static" fetches the keymap JSON the deployment serves, which is baked from its own XKB data and needs no frontend rebuild to retune; "live" starts from that file and additionally follows the server, which pushes its current keymap whenever the X server keymap changes. A deployment only offers the runtime sources if it built the dashboard with DYNAMIC_OSK_KEYMAP set; otherwise this stays on the bundle, and a missing or broken file falls back to it.',
+    },
+    {
         "name": "ui_show_connection_indicator",
         "type": "bool",
         "default": True,

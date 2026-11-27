@@ -2794,6 +2794,10 @@ class CentralizedStreamServer:
             ),
             "ui_layout": getattr(self.settings, "ui_layout", "default"),
             "ui_layout_allowed": enum_allowed("ui_layout"),
+            # The on-screen keyboard picks its key-source off this, before any
+            # stream exists: an operator who set SELKIES_OSK_KEYMAP must be
+            # able to retune the dashboard without the page first connecting.
+            "osk_keymap": getattr(self.settings, "osk_keymap", "bundle"),
         }
 
     @staticmethod

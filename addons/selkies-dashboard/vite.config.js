@@ -15,6 +15,11 @@ export default ({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const inject = env.SELKIES_INJECT === '1' || env.SELKIES_INJECT === 'true';
   const downloadsPath = env.SELKIES_UPLOAD_DIR || '~/Desktop';
+  // Where a deployment serves its own on-screen-keyboard keymap JSON, empty for
+  // a build that has none. Baked into the bundle rather than probed at runtime
+  // so this package stands alone: without it the keyboard uses its committed
+  // table and never issues a request.
+  const oskKeymapUrl = env.DYNAMIC_OSK_KEYMAP || '';
 
   return defineConfig({
     // Relative asset URLs so the dist works when served under a subfolder prefix.
@@ -53,7 +58,10 @@ export default ({ mode }) => {
     },
     define: {
       // if inject=false -> undefined, so runtime falls back to localStorage/default
-      'window.__SELKIES_INJECTED_PATH_PREFIX__': inject ? JSON.stringify(downloadsPath) : 'undefined'
+      'window.__SELKIES_INJECTED_PATH_PREFIX__': inject ? JSON.stringify(downloadsPath) : 'undefined',
+      // An empty DYNAMIC_OSK_KEYMAP leaves this undefined, and loadRuntimeKeymap
+      // then keeps the bundled table without ever fetching.
+      'window.__SELKIES_OSK_KEYMAP_URL__': oskKeymapUrl ? JSON.stringify(oskKeymapUrl) : 'undefined'
     }
   })
 }

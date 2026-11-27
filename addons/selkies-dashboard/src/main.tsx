@@ -9,8 +9,10 @@
  *
  * Probes `/api/status` for the server's streaming mode, dual-mode flag, and
  * layout, publishes them as `window.__SELKIES_STREAMING_MODE__`,
- * `window.__SELKIES_DUAL_MODE__`, `window.__SELKIES_UI_LAYOUT__`, and
- * `window.__SELKIES_UI_LAYOUT_ALLOWED__`, waits
+ * `window.__SELKIES_DUAL_MODE__`, `window.__SELKIES_UI_LAYOUT__`,
+ * `window.__SELKIES_UI_LAYOUT_ALLOWED__`, and
+ * `window.__SELKIES_OSK_KEYMAP__`, kicks the on-screen keyboard's runtime
+ * keymap fetch, waits
  * for the runtime-served core script to expose `window.selkiesCoreInitialize`
  * and starts it, then mounts the dashboard: the full `App` under `#root` for
  * the primary display, only the floating gamepad button for the `#player2`
@@ -26,6 +28,7 @@ import App from './App';
 import PlayerGamepadButton from './panels/player-gamepad-button';
 import './index.css';
 import { getRoutePrefix } from './utils';
+import { loadRuntimeKeymap } from './keyboard/load-keymap';
 import { urlFragmentKeyword } from '../../selkies-web-core/lib/page-url.js';
 import "../../universal-touch-gamepad/universalTouchGamepad.js";
 
@@ -35,6 +38,7 @@ declare global {
     __SELKIES_DUAL_MODE__?: boolean;
     __SELKIES_UI_LAYOUT__?: string;
     __SELKIES_UI_LAYOUT_ALLOWED__?: string[];
+    __SELKIES_OSK_KEYMAP__?: string;
     selkiesCoreInitialize?: () => void;
   }
 }
@@ -56,6 +60,7 @@ async function detectInitialMode(): Promise<void> {
     if (data && typeof data.enable_dual_mode !== 'undefined') window.__SELKIES_DUAL_MODE__ = !!data.enable_dual_mode;
     if (typeof data?.ui_layout === 'string') window.__SELKIES_UI_LAYOUT__ = data.ui_layout;
     if (Array.isArray(data?.ui_layout_allowed)) window.__SELKIES_UI_LAYOUT_ALLOWED__ = data.ui_layout_allowed;
+    if (typeof data?.osk_keymap === 'string') window.__SELKIES_OSK_KEYMAP__ = data.osk_keymap;
   } catch (err) {
     console.warn(`Error detecting initial mode: ${err}`);
   }
@@ -81,6 +86,9 @@ const playerClientModes = ['#player2', '#player3', '#player4'];
 
 (async () => {
   await detectInitialMode();
+  // Never awaited: the keyboard paints from the bundled table and swaps its
+  // faces when the runtime one arrives, so a stalled fetch cannot delay a frame.
+  void loadRuntimeKeymap();
   try {
     await waitForCore();
     window.selkiesCoreInitialize!();
