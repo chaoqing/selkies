@@ -33,7 +33,7 @@ const en: Dictionary = {
     },
     keyboardButtonToggleTitle: "Keyboard Button",
     osk: {
-        title: "On-Screen Keyboard",
+        title: "Keyboard Settings",
         sourceLabel: "Keyboard:",
         sourceSystem: "System keyboard",
         sourceFrontend: "Transparent full keyboard",
@@ -734,7 +734,7 @@ const zh_cn: Dictionary = {
     },
     keyboardButtonToggleTitle: "键盘按钮",
     osk: {
-        title: "屏幕键盘",
+        title: "键盘设置",
         sourceLabel: "键盘：",
         sourceSystem: "系统键盘",
         sourceFrontend: "透明全键盘",
@@ -1092,7 +1092,7 @@ const zh_tw: Dictionary = {
     },
     keyboardButtonToggleTitle: "鍵盤按鈕開關",
     osk: {
-        title: "螢幕鍵盤",
+        title: "鍵盤設置",
         sourceLabel: "鍵盤：",
         sourceSystem: "系統鍵盤",
         sourceFrontend: "透明全鍵盤",

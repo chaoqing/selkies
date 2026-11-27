@@ -80,6 +80,10 @@ export interface PanelSpec {
 
 export const PANELS: PanelSpec[] = [
   {
+    id: "keyboard", contentId: "keyboard-content", title: "osk.title", icon: TextCursorInput, kind: "panel",
+    shown: ({ primary }) => primary, Body: OnScreenKeyboardSettings,
+  },
+  {
     id: "video", contentId: "settings-content", title: "sections.video.title", tab: "settingsTabs.video", kind: "settings",
     shown: ({ panels }) => panels.video,
     cards: [
@@ -136,10 +140,6 @@ export const PANELS: PanelSpec[] = [
   {
     id: "shortcuts", contentId: "shortcuts-content", title: "sections.shortcuts.title", icon: Keyboard, kind: "panel",
     shown: ({ d }) => d.renderable.shortcuts, Body: ShortcutsMenu,
-  },
-  {
-    id: "keyboard", contentId: "keyboard-content", title: "osk.title", icon: TextCursorInput, kind: "panel",
-    shown: ({ primary }) => primary, Body: OnScreenKeyboardSettings,
   },
 ];
 
