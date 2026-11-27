@@ -169,6 +169,23 @@ function InitUI() {
 		overflow: hidden;
 	}
 
+	/* Portrait (phone PWA): pin the stream to the top so the letterbox bars
+	   gather at the bottom where the fixed OSK overlays, instead of splitting
+	   above and below. The visible sink may be any of #videoCanvas,
+	   #videoWorkerCanvas, #videoStream or a bare video, and the core recenters
+	   by writing inline top on every resize, so match the element kinds with
+	   !important. object-position handles the full-box contain path where the
+	   letterbox lives inside the element. Canvas and input overlay move
+	   together to keep pointer mapping aligned. Landscape is untouched. */
+	@media (orientation: portrait) {
+		.video-container canvas,
+		.video-container video,
+		.video-container #overlayInput {
+			top: 0 !important;
+			object-position: top !important;
+		}
+	}
+
 	.video-container video,
 	.video-container #overlayInput{
 		position: absolute;
